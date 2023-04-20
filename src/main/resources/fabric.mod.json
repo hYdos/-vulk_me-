@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "vk_interop_experiments",
+  "version": "${version}",
+  "name": "VKInteropExperiments",
+  "description": "",
+  "authors": [],
+  "contact": {
+    "repo": "https://github.com/hydos/VKInteropExperiments"
+  },
+  "license": "All-Rights-Reserved",
+  "icon": "assets/vk_interop_experiments/icon.png",
+  "environment": "client",
+  "entrypoints": {},
+  "mixins": [
+    "VKInteropExperiments.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "${minecraft_version}"
+  }
+}
