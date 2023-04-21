@@ -105,17 +105,17 @@ public class Instance implements Closeable, VkObjectHolder<VkInstance> {
     }
 
     private static List<String> getSupportedValidationLayers() {
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            var layerCount = stack.callocInt(1);
-            VK10.vkEnumerateInstanceLayerProperties(layerCount, null);
-            int numLayers = layerCount.get(0);
-            LOGGER.info("{} Vulkan layers supported", numLayers);
+        try (var stack = MemoryStack.stackPush()) {
+            var pLayerCount = stack.callocInt(1);
+            VK10.vkEnumerateInstanceLayerProperties(pLayerCount, null);
+            var layerCount = pLayerCount.get(0);
+            LOGGER.info("{} Vulkan layers supported", layerCount);
 
-            var pProperties = VkLayerProperties.calloc(numLayers, stack);
-            VK10.vkEnumerateInstanceLayerProperties(layerCount, pProperties);
+            var pProperties = VkLayerProperties.calloc(layerCount, stack);
+            VK10.vkEnumerateInstanceLayerProperties(pLayerCount, pProperties);
 
             var supportedLayers = new ArrayList<String>();
-            for (var i = 0; i < numLayers; i++) {
+            for (var i = 0; i < layerCount; i++) {
                 var property = pProperties.get(i);
                 supportedLayers.add(property.layerNameString());
             }

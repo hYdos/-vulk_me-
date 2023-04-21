@@ -85,7 +85,7 @@ public class SurfaceSwapchain implements Swapchain {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             var resize = false;
             var present = VkPresentInfoKHR.calloc(stack)
-                    .sType(KHRSwapchain.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR)
+                    .sType$Default()
                     .pWaitSemaphores(stack.longs(syncSemaphores[currentFrame].renderCompleteSemaphore().vk()))
                     .swapchainCount(1)
                     .pSwapchains(stack.longs(swapchain))
