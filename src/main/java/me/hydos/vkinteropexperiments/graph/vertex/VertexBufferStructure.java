@@ -6,8 +6,9 @@ import org.lwjgl.vulkan.VkVertexInputAttributeDescription;
 import org.lwjgl.vulkan.VkVertexInputBindingDescription;
 
 public class VertexBufferStructure implements VertexInputStateInfo {
-    private static final int NUMBER_OF_ATTRIBUTES = 1;
-    private static final int POSITION_COMPONENTS = 3;
+    private static final int NUMBER_OF_ATTRIBUTES = 2;
+    private static final int POS_SIZE = 3 * Float.BYTES;
+    public static final int UV_SIZE = 2 * Float.BYTES;
     private final VkPipelineVertexInputStateCreateInfo vertexInput;
     private final VkVertexInputAttributeDescription.Buffer vertInAttribs;
     private final VkVertexInputBindingDescription.Buffer vertInBindings;
@@ -25,9 +26,17 @@ public class VertexBufferStructure implements VertexInputStateInfo {
                 .format(VK10.VK_FORMAT_R32G32B32_SFLOAT)
                 .offset(0);
 
+        // UV's
+        i++;
+        vertInAttribs.get(i)
+                .binding(0)
+                .location(i)
+                .format(VK10.VK_FORMAT_R32G32_SFLOAT)
+                .offset(POS_SIZE);
+
         vertInBindings.get(0)
                 .binding(0)
-                .stride(POSITION_COMPONENTS * Float.BYTES)
+                .stride(POS_SIZE + UV_SIZE)
                 .inputRate(VK10.VK_VERTEX_INPUT_RATE_VERTEX);
 
         vertexInput

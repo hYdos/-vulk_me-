@@ -27,14 +27,14 @@ public class Renderer implements Closeable {
     public final LogicalDevice logicalDevice;
     public final Surface surface;
     public final Queue.Graphics graphicsQueue;
-    public final Swapchain swapchain;
     public final CommandPool cmdPool;
     private final PipelineCache pipelineCache;
     public final Queue.Present presentQueue;
     public final ForwardRenderActivity fwdRenderActivity;
     private final List<GpuModel> models = new ArrayList<>();
+    public Swapchain swapchain;
 
-    public Renderer(boolean enableDebug, DebugWindow window, Settings settings) {
+    public Renderer(boolean enableDebug, DebugWindow window, Scene scene, Settings settings) {
         this.instance = new Instance(enableDebug, window != null);
         this.physicalDevice = PhysicalDevice.create(instance, settings.preferredDevice);
         this.logicalDevice = new LogicalDevice(physicalDevice);
@@ -44,22 +44,37 @@ public class Renderer implements Closeable {
         this.swapchain = window != null ? new SurfaceSwapchain(logicalDevice, surface, window, settings.imageCount, settings.vSync) : null;
         this.cmdPool = new CommandPool(logicalDevice, graphicsQueue.queueFamilyIndex);
         this.pipelineCache = new PipelineCache(logicalDevice);
-        this.fwdRenderActivity = new ForwardRenderActivity(((SurfaceSwapchain) swapchain), cmdPool, pipelineCache);
+        this.fwdRenderActivity = new ForwardRenderActivity(((SurfaceSwapchain) swapchain), cmdPool, pipelineCache, scene);
     }
 
     public void loadModels(List<ModelData> models) {
-        LOGGER.info("Loading {} model(s)", models.size());
+        LOGGER.info("Loading {} models", models.size());
         this.models.addAll(GpuModel.transformModels(models, cmdPool, graphicsQueue));
-        LOGGER.info("Loaded {} model(s)", models.size());
+        LOGGER.info("Loaded {} models", models.size());
     }
 
-    public void render(DebugWindow window, Scene scene) {
-        ((SurfaceSwapchain) swapchain).acquireNextImage();
+    public void render(DebugWindow window) {
+        if (window.width <= 0 && window.height <= 0) return;
+        else if (window.resized || ((SurfaceSwapchain) swapchain).acquireNextImage()) {
+            window.resized = false;
+            resize(window);
+            ((SurfaceSwapchain) swapchain).acquireNextImage();
+        }
 
         fwdRenderActivity.recordCmdBuffer(models);
         fwdRenderActivity.submit(presentQueue);
 
-        ((SurfaceSwapchain) swapchain).presentImage(graphicsQueue);
+        if (((SurfaceSwapchain) swapchain).presentImage(graphicsQueue)) {
+            window.resized = true;
+        }
+    }
+
+    private void resize(DebugWindow window) {
+        logicalDevice.waitIdle();
+        graphicsQueue.waitIdle();
+        var oldSwapchain = (SurfaceSwapchain) swapchain;
+        oldSwapchain.close();
+        swapchain = new SurfaceSwapchain(logicalDevice, surface, window, oldSwapchain.requestedImgCount, oldSwapchain.vsync);
     }
 
     @Override
@@ -81,5 +96,6 @@ public class Renderer implements Closeable {
             boolean vSync,
             int imageCount,
             String preferredDevice
-    ) {}
+    ) {
+    }
 }

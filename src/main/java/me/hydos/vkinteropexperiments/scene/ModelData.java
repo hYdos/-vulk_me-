@@ -8,6 +8,7 @@ public record ModelData(
 ) {
     public record MeshData(
             float[] positions,
+            float[] uvs,
             int[] indices
     ) {}
 }

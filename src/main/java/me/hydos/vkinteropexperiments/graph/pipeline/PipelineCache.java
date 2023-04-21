@@ -9,7 +9,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
-import java.io.IOException;
 
 import static me.hydos.vkinteropexperiments.graph.VkUtils.ok;
 
@@ -20,7 +19,7 @@ public class PipelineCache implements Closeable, VkObjectHolder<Long> {
 
     public PipelineCache(LogicalDevice logicalDevice) {
         try (var stack = MemoryStack.stackPush()) {
-            LOGGER.info("Creating");
+            LOGGER.info("Creating PiplineCache");
             this.logicalDevice = logicalDevice;
             var createInfo = VkPipelineCacheCreateInfo.calloc(stack).sType$Default();
 

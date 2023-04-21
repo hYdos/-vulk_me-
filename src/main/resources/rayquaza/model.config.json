@@ -1,0 +1,132 @@
+{
+  "shadingMethod": "pokemon",
+  "emissionIntensity": 0.3,
+  "modelLocation": "model.gltf",
+  "hiddenMeshes": [],
+  "materials": {
+    "body_a": {
+      "albedo": ["body_a_alb.jxl"],
+      "normal": [
+        "body_a_nrm.jxl",
+        "body_a_nrm_overlay.jxl"
+      ],
+      "metallic": ["body_a_mtl.jxl"],
+      "roughness": ["body_a_rgn.jxl"],
+      "ao": ["body_a_ao.jxl"],
+      "emission": ["body_a_emi.jxl"]
+    },
+    "body_b": {
+      "albedo": ["body_b_alb.jxl"],
+      "normal": [
+        "body_b_nrm.jxl",
+        "body_b_nrm_overlay.jxl"
+      ],
+      "metallic": ["body_b_mtl.jxl"],
+      "roughness": ["body_b_rgn.jxl"],
+      "ao": ["body_b_ao.jxl"]
+    },
+
+    "eyes": {
+      "albedo": ["eye_alb.jxl"],
+      "normal": ["eye_nrm.jxl"],
+      "emission": ["eye_alb.jxl"]
+    }
+  },
+  "variants": {
+    "shiny": [
+      {
+        "type": "set_texture",
+        "material": "body_a",
+        "textureType": "albedo",
+        "texture": {
+          "layers": ["body_a_shiny_alb.jxl"]
+        }
+      },
+      {
+        "type": "set_texture",
+        "material": "body_b",
+        "textureType": "albedo",
+        "texture": {
+          "layers": ["body_b_shiny_alb.jxl"]
+        }
+      }
+    ]
+  },
+  "animations": {
+    "FLYING": {
+      "idle": {
+        "main": "fly_defaultwait01_loop.tranm",
+        "chance": 20,
+        "variants": ["fly_defaultidle01.tranm", "fly_defaultidle02.tranm"]
+      },
+      "battle_idle": {
+        "start": "fly_roar01.tranm",
+        "main": "fly_battlewait01_loop.tranm",
+        "chance": 10,
+        "variants": ["fly_roar01.tranm"]
+      },
+      "faint": {
+        "start": "fly_down01_start.tranm",
+        "main": "fly_down01_loop.tranm"
+      },
+      "jump": {
+        "start": "fly_jumpup01_start.tranm",
+        "main": "fly_jumpup01_loop.tranm",
+        "end": "fly_land02.tranm"
+      },
+      "fall": {
+        "start": "fly_jumpdown01_start.tranm",
+        "main": "fly_jumpdown01_loop.tranm",
+        "end": "fly_land02.tranm"
+      },
+      "stunned": {
+        "start": "fly_stun01_start.tranm",
+        "main": "fly_stun01_loop.tranm"
+      },
+      "sleep": {
+        "start": "fly_sleep01_start.tranm",
+        "main": "fly_sleep01_loop.tranm",
+        "end": "fly_sleep01_end.tranm"
+      },
+      "eat": {
+        "start": "fly_eat01_start.tranm",
+        "main": "fly_eat01_loop.tranm",
+        "end": "fly_eat01_end.tranm"
+      },
+      "attack1": {"main": "fly_attack01.tranm"},
+      "attack2": {"main": "fly_attack02.tranm"},
+      "damage1": {"main": "fly_damage01.tranm"},
+      "damage2": {"main": "fly_damage02.tranm"},
+      "ranged_attack1": {"main": "fly_rangeattack01.tranm"},
+      "ranged_attack2": {
+        "start": "fly_rangeattack02_start.tranm",
+        "main": "fly_rangeattack02_loop.tranm",
+        "end": "fly_rangeattack02_end.tranm"
+      },
+      "spot_player": {"main": "fly_notice01.tranm"},
+      "happy": {"main": "fly_glad01.tranm"},
+      "angry": {"main": "fly_hate01.tranm"},
+      "turn_left": {"main": "fly_turn_l090.tranm"},
+      "turn_right": {"main": "fly_turn_r090.tranm"},
+      "refresh": {"main": "fly_refresh01.tranm"},
+      "move": {"main": "fly_walk01_loop.tranm"},
+      "move_fast": {"main": "fly_run01_loop.tranm"}
+    }
+  },
+  "pokemonConfig": {
+    "nameTagHeight": 1,
+    "partyPortrait": {
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": -30,
+        "z": 0
+      },
+      "scale": 1.0
+    }
+  }
+}

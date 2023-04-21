@@ -24,7 +24,7 @@ public class Pipeline implements Closeable, VkObjectHolder<Long> {
             var shaderModules = creationInfo.shaderProgram.shaderModules;
             var moduleCount = shaderModules.length;
             var shaderStages = VkPipelineShaderStageCreateInfo.calloc(moduleCount, stack);
-            for (int i = 0; i < moduleCount; i++) {
+            for (var i = 0; i < moduleCount; i++) {
                 shaderStages.get(i)
                         .sType$Default()
                         .stage(shaderModules[i].shaderStage())
@@ -52,6 +52,17 @@ public class Pipeline implements Closeable, VkObjectHolder<Long> {
                     .sType$Default()
                     .rasterizationSamples(VK10.VK_SAMPLE_COUNT_1_BIT);
 
+            var depthStencilCreateInfo = (VkPipelineDepthStencilStateCreateInfo) null;
+            if (creationInfo.hasDepth) {
+                depthStencilCreateInfo = VkPipelineDepthStencilStateCreateInfo.calloc(stack)
+                        .sType$Default()
+                        .depthTestEnable(true)
+                        .depthWriteEnable(true)
+                        .depthCompareOp(VK10.VK_COMPARE_OP_LESS_OR_EQUAL)
+                        .depthBoundsTestEnable(false)
+                        .stencilTestEnable(false);
+            }
+
             var blendAttachmentState = VkPipelineColorBlendAttachmentState.calloc(creationInfo.colorAttachmentCount(), stack);
 
             for (var i = 0; i < creationInfo.colorAttachmentCount(); i++)
@@ -68,11 +79,18 @@ public class Pipeline implements Closeable, VkObjectHolder<Long> {
                             VK10.VK_DYNAMIC_STATE_SCISSOR
                     ));
 
-            var layoutCreateInfo = VkPipelineLayoutCreateInfo.calloc(stack).sType$Default();
+            var pushConstantRange = VkPushConstantRange.calloc(1, stack)
+                    .stageFlags(VK10.VK_SHADER_STAGE_VERTEX_BIT)
+                    .offset(0)
+                    .size(creationInfo.pushConstantsSize);
+
+            var layoutCreateInfo = VkPipelineLayoutCreateInfo.calloc(stack)
+                    .sType$Default()
+                    .pPushConstantRanges(pushConstantRange);
             ok(VK10.vkCreatePipelineLayout(logicalDevice.vk(), layoutCreateInfo, null, pp), "Failed to create pipeline layout");
             this.layout = pp.get(0);
 
-            VkGraphicsPipelineCreateInfo.Buffer pipeline = VkGraphicsPipelineCreateInfo.calloc(1, stack)
+            var pipeline = VkGraphicsPipelineCreateInfo.calloc(1, stack)
                     .sType$Default()
                     .pStages(shaderStages)
                     .pVertexInputState(creationInfo.vertInputStateInfo.getVertexInput())
@@ -83,7 +101,8 @@ public class Pipeline implements Closeable, VkObjectHolder<Long> {
                     .pColorBlendState(colorBlendState)
                     .pDynamicState(dynamicStateCreateInfo)
                     .layout(layout)
-                    .renderPass(creationInfo.vkRenderPass);
+                    .renderPass(creationInfo.vkRenderPass)
+                    .pDepthStencilState(depthStencilCreateInfo);
 
             ok(VK10.vkCreateGraphicsPipelines(logicalDevice.vk(), cache.vk(), pipeline, null, pp), "Error creating Pipeline");
             this.pipeline = pp.get(0);
@@ -105,6 +124,8 @@ public class Pipeline implements Closeable, VkObjectHolder<Long> {
             long vkRenderPass,
             ShaderProgram shaderProgram,
             int colorAttachmentCount,
+            boolean hasDepth,
+            int pushConstantsSize,
             VertexInputStateInfo vertInputStateInfo
     ) implements Closeable {
         @Override

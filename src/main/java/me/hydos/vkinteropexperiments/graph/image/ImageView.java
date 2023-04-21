@@ -1,4 +1,4 @@
-package me.hydos.vkinteropexperiments.graph.swapchain;
+package me.hydos.vkinteropexperiments.graph.image;
 
 import me.hydos.vkinteropexperiments.graph.VkObjectHolder;
 import me.hydos.vkinteropexperiments.graph.setup.LogicalDevice;

@@ -26,7 +26,7 @@ public class GpuModel implements Closeable {
         this.gpuMeshList = new ArrayList<>();
     }
 
-    private static TransferBuffers createIndicesBuffers(LogicalDevice logicalDevice, ModelData.MeshData meshData) {
+    private static TransferBuffers createIndexBuffers(LogicalDevice logicalDevice, ModelData.MeshData meshData) {
         int[] indices = meshData.indices();
         int numIndices = indices.length;
         int bufferSize = numIndices * Integer.BYTES;
@@ -42,19 +42,32 @@ public class GpuModel implements Closeable {
         return new TransferBuffers(srcBuffer, dstBuffer);
     }
 
-    private static TransferBuffers createVerticesBuffers(LogicalDevice logicalDevice, ModelData.MeshData meshData) {
-        var positions = meshData.positions();
-        var positionCount = positions.length;
-        var bufferSize = positionCount * Float.BYTES;
+    private static TransferBuffers createVertexBuffers(LogicalDevice logicalDevice, ModelData.MeshData meshData) {
+        float[] positions = meshData.positions();
+        float[] uvs = meshData.uvs();
+        if (uvs == null || uvs.length == 0) uvs = new float[(positions.length / 3) * 2];
+
+        var elementCount = positions.length + uvs.length;
+        var bufferSize = elementCount * Float.BYTES;
 
         var srcBuffer = new VkBuffer(logicalDevice, bufferSize, VK10.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK10.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK10.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         var dstBuffer = new VkBuffer(logicalDevice, bufferSize, VK10.VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK10.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK10.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
         var mappedMemory = srcBuffer.map();
         var data = MemoryUtil.memFloatBuffer(mappedMemory, (int) srcBuffer.requestedSize);
-        data.put(positions);
-        srcBuffer.unMap();
 
+        int rows = positions.length / 3;
+        for (var row = 0; row < rows; row++) {
+            var startPos = row * 3;
+            var startTextCoord = row * 2;
+            data.put(positions[startPos]);
+            data.put(positions[startPos + 1]);
+            data.put(positions[startPos + 2]);
+            data.put(uvs[startTextCoord]);
+            data.put(uvs[startTextCoord + 1]);
+        }
+
+        srcBuffer.unMap();
         return new TransferBuffers(srcBuffer, dstBuffer);
     }
 
@@ -70,7 +83,7 @@ public class GpuModel implements Closeable {
     }
 
     public static List<GpuModel> transformModels(List<ModelData> modelDataList, CommandPool cmdPool, Queue queue) {
-        var vulkanModelList = new ArrayList<GpuModel>();
+        var gpuModels = new ArrayList<GpuModel>();
         var logicalDevice = cmdPool.logicalDevice;
         var cmd = new CommandBuffer(cmdPool, true, true);
         var stagingBufferList = new ArrayList<VkBuffer>();
@@ -78,18 +91,18 @@ public class GpuModel implements Closeable {
         cmd.beginRecording();
         for (var modelData : modelDataList) {
             var vulkanModel = new GpuModel(modelData.name());
-            vulkanModelList.add(vulkanModel);
+            gpuModels.add(vulkanModel);
 
             // Transform meshes loading their data into GPU buffers
             for (var meshData : modelData.meshDataList()) {
-                TransferBuffers verticesBuffers = createVerticesBuffers(logicalDevice, meshData);
-                TransferBuffers indicesBuffers = createIndicesBuffers(logicalDevice, meshData);
-                stagingBufferList.add(verticesBuffers.srcBuffer());
-                stagingBufferList.add(indicesBuffers.srcBuffer());
-                recordTransferCommand(cmd, verticesBuffers);
-                recordTransferCommand(cmd, indicesBuffers);
+                var vertexBuffers = createVertexBuffers(logicalDevice, meshData);
+                var indexBuffers = createIndexBuffers(logicalDevice, meshData);
+                stagingBufferList.add(vertexBuffers.srcBuffer());
+                stagingBufferList.add(indexBuffers.srcBuffer());
+                recordTransferCommand(cmd, vertexBuffers);
+                recordTransferCommand(cmd, indexBuffers);
 
-                vulkanModel.gpuMeshList.add(new GpuMesh(verticesBuffers.dstBuffer(), indicesBuffers.dstBuffer(), meshData.indices().length));
+                vulkanModel.gpuMeshList.add(new GpuMesh(vertexBuffers.dstBuffer(), indexBuffers.dstBuffer(), meshData.indices().length));
             }
         }
 
@@ -105,7 +118,7 @@ public class GpuModel implements Closeable {
 
         cmd.close();
         stagingBufferList.forEach(VkBuffer::close);
-        return vulkanModelList;
+        return gpuModels;
     }
 
     @Override
@@ -121,7 +134,7 @@ public class GpuModel implements Closeable {
     public record GpuMesh(
             VkBuffer verticesBuffer,
             VkBuffer indicesBuffer,
-            int numIndices
+            int indexCount
     ) implements Closeable {
         @Override
         public void close() {

@@ -1,4 +1,4 @@
-package me.hydos.vkinteropexperiments.graph.swapchain;
+package me.hydos.vkinteropexperiments.graph.image;
 
 import org.lwjgl.vulkan.VK10;
 

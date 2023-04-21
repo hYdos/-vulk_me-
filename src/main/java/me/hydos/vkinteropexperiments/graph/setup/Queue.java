@@ -25,7 +25,7 @@ public class Queue implements VkObjectHolder<VkQueue> {
 
     public Queue(LogicalDevice device, int queueFamilyIndex, int queueIndex) {
         try (var stack = MemoryStack.stackPush()) {
-            LOGGER.debug("Creating queue");
+            LOGGER.debug("Creating Queue");
             this.queueFamilyIndex = queueFamilyIndex;
             var pQueue = stack.mallocPointer(1);
             vkGetDeviceQueue(device.vk(), queueFamilyIndex, queueIndex, pQueue);

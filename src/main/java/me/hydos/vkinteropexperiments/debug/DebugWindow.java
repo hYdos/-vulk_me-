@@ -36,8 +36,12 @@ public class DebugWindow implements Closeable {
 
     @Override
     public void close() {
-        Callbacks.glfwFreeCallbacks(pointer);
-        GLFW.glfwDestroyWindow(pointer);
-        GLFW.glfwTerminate();
+        try {
+            Callbacks.glfwFreeCallbacks(pointer);
+            GLFW.glfwDestroyWindow(pointer);
+            GLFW.glfwTerminate();
+        } catch (NullPointerException e) {
+            // The window probably already closed :(
+        }
     }
 }

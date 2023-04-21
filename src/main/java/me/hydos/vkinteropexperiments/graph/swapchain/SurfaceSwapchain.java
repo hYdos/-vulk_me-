@@ -2,6 +2,8 @@ package me.hydos.vkinteropexperiments.graph.swapchain;
 
 import me.hydos.vkinteropexperiments.debug.DebugWindow;
 import me.hydos.vkinteropexperiments.debug.Surface;
+import me.hydos.vkinteropexperiments.graph.image.ImageView;
+import me.hydos.vkinteropexperiments.graph.image.ImageViewData;
 import me.hydos.vkinteropexperiments.graph.setup.LogicalDevice;
 import me.hydos.vkinteropexperiments.graph.setup.PhysicalDevice;
 import me.hydos.vkinteropexperiments.graph.setup.Queue;
@@ -25,13 +27,16 @@ public class SurfaceSwapchain implements Swapchain {
     public final SurfaceFormat surfaceFormat;
     public final long swapchain;
     public final VkExtent2D extent;
+    public final int requestedImgCount;
+    public final boolean vsync;
     public int currentFrame;
 
     public SurfaceSwapchain(LogicalDevice logicalDevice, Surface surface, DebugWindow window, int requestedImgCount, boolean enableVsync) {
-        LOGGER.info("Creating Window based Swapchain");
-        this.logicalDevice = logicalDevice;
-
         try (var stack = MemoryStack.stackPush()) {
+            LOGGER.info("Creating Window based Swapchain");
+            this.logicalDevice = logicalDevice;
+            this.requestedImgCount = requestedImgCount;
+            this.vsync = enableVsync;
             var physicalDevice = logicalDevice.physicalDevice;
             var surfaceCaps = VkSurfaceCapabilitiesKHR.calloc(stack);
             ok(KHRSurface.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice.vk(), surface.vk(), surfaceCaps), "Failed to get surface capabilities");

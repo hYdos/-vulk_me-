@@ -13,6 +13,7 @@ val lwjglVersion = "3.3.2"
 
 repositories {
     maven("https://maven.parchmentmc.org")
+    maven("https://maven.thepokecraftmod.com/releases")
 }
 
 dependencies {
@@ -22,6 +23,9 @@ dependencies {
         parchment("org.parchmentmc.data:parchment-$parchmentVersion@zip")
     })
     modImplementation("net.fabricmc:fabric-loader:${loaderVersion}")
+
+    implementation("com.thebombzen", "jxlatte", "1.1.0")
+    implementation("com.thepokecraftmod", "modelLoader", "1.2.3")
 
     implementation(platform("org.lwjgl:lwjgl-bom:$lwjglVersion"))
     implementation("org.lwjgl", "lwjgl-assimp")
