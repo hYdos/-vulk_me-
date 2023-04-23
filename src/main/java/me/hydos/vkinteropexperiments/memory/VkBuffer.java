@@ -2,7 +2,6 @@ package me.hydos.vkinteropexperiments.memory;
 
 import me.hydos.vkinteropexperiments.graph.VkUtils;
 import me.hydos.vkinteropexperiments.graph.setup.LogicalDevice;
-import org.apache.commons.logging.Log;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
@@ -12,12 +11,10 @@ import org.lwjgl.vulkan.VkMemoryAllocateInfo;
 import org.lwjgl.vulkan.VkMemoryRequirements;
 
 import java.io.Closeable;
-import java.io.IOException;
 
 import static me.hydos.vkinteropexperiments.graph.VkUtils.ok;
 import static org.lwjgl.vulkan.VK10.vkCreateBuffer;
 
-// TODO: VMA
 public class VkBuffer implements Closeable {
 
     public final long allocationSize;
@@ -63,7 +60,7 @@ public class VkBuffer implements Closeable {
     public long map() {
         if (mappedMemory == MemoryUtil.NULL) {
             ok(VK10.vkMapMemory(logicalDevice.vk(), memory, 0, allocationSize, 0, pBuffer), "Failed to map Buffer");
-            mappedMemory = pBuffer.get(0);
+            this.mappedMemory = pBuffer.get(0);
         }
 
         return mappedMemory;

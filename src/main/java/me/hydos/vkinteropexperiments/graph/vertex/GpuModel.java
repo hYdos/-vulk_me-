@@ -1,10 +1,12 @@
 package me.hydos.vkinteropexperiments.graph.vertex;
 
+import me.hydos.vkinteropexperiments.graph.cache.TextureCache;
 import me.hydos.vkinteropexperiments.graph.command.CommandBuffer;
 import me.hydos.vkinteropexperiments.graph.command.CommandPool;
 import me.hydos.vkinteropexperiments.graph.setup.LogicalDevice;
 import me.hydos.vkinteropexperiments.graph.setup.Queue;
 import me.hydos.vkinteropexperiments.graph.sync.Fence;
+import me.hydos.vkinteropexperiments.graph.image.texture.Texture;
 import me.hydos.vkinteropexperiments.memory.VkBuffer;
 import me.hydos.vkinteropexperiments.scene.ModelData;
 import org.lwjgl.system.MemoryStack;
@@ -12,6 +14,7 @@ import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.VK10;
 import org.lwjgl.vulkan.VkBufferCopy;
 
+import java.awt.image.BufferedImage;
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,11 +22,10 @@ import java.util.List;
 public class GpuModel implements Closeable {
 
     public final String name;
-    public final List<GpuMesh> gpuMeshList;
+    public final List<Material> materials = new ArrayList<>();
 
     public GpuModel(String name) {
         this.name = name;
-        this.gpuMeshList = new ArrayList<>();
     }
 
     private static TransferBuffers createIndexBuffers(LogicalDevice logicalDevice, ModelData.MeshData meshData) {
@@ -82,30 +84,54 @@ public class GpuModel implements Closeable {
         }
     }
 
-    public static List<GpuModel> transformModels(List<ModelData> modelDataList, CommandPool cmdPool, Queue queue) {
+    private static Material transformMaterial(BufferedImage material, LogicalDevice logicalDevice, TextureCache cache, CommandBuffer cmdBuffer, List<Texture> textures) {
+        var texture = cache.createTexture(logicalDevice, material, VK10.VK_FORMAT_R8G8B8A8_SRGB);
+        texture.recordTransition(cmdBuffer);
+        textures.add(texture);
+        return new Material(texture, new ArrayList<>());
+    }
+
+    public static List<GpuModel> transformModels(List<ModelData> modelDataList, TextureCache cache, CommandPool cmdPool, Queue queue) {
         var gpuModels = new ArrayList<GpuModel>();
         var logicalDevice = cmdPool.logicalDevice;
         var cmd = new CommandBuffer(cmdPool, true, true);
         var stagingBufferList = new ArrayList<VkBuffer>();
+        var textures = new ArrayList<Texture>();
 
         cmd.beginRecording();
         for (var modelData : modelDataList) {
             var vulkanModel = new GpuModel(modelData.name());
             gpuModels.add(vulkanModel);
 
-            // Transform meshes loading their data into GPU buffers
-            for (var meshData : modelData.meshDataList()) {
-                var vertexBuffers = createVertexBuffers(logicalDevice, meshData);
-                var indexBuffers = createIndexBuffers(logicalDevice, meshData);
-                stagingBufferList.add(vertexBuffers.srcBuffer());
-                stagingBufferList.add(indexBuffers.srcBuffer());
-                recordTransferCommand(cmd, vertexBuffers);
-                recordTransferCommand(cmd, indexBuffers);
+            var defaultVulkanMaterial = (Material) null;
+            for (var material : modelData.materials()) {
+                var vulkanMaterial = transformMaterial(material, logicalDevice, cache, cmd, textures);
+                vulkanModel.materials.add(vulkanMaterial);
+            }
 
-                vulkanModel.gpuMeshList.add(new GpuMesh(vertexBuffers.dstBuffer(), indexBuffers.dstBuffer(), meshData.indices().length));
+            for (var meshData : modelData.meshes()) {
+                var verticesBuffers = createVertexBuffers(logicalDevice, meshData);
+                var indicesBuffers = createIndexBuffers(logicalDevice, meshData);
+                stagingBufferList.add(verticesBuffers.srcBuffer());
+                stagingBufferList.add(indicesBuffers.srcBuffer());
+                recordTransferCommand(cmd, verticesBuffers);
+                recordTransferCommand(cmd, indicesBuffers);
+
+                var vulkanMesh = new Mesh(verticesBuffers.dstBuffer(), indicesBuffers.dstBuffer(), meshData.indices().length);
+                var vulkanMaterial = (Material) null;
+                var materialIdx = meshData.materialIdx();
+
+                if (materialIdx >= 0 && materialIdx < vulkanModel.materials.size())
+                    vulkanMaterial = vulkanModel.materials.get(materialIdx);
+                else {
+                    if (defaultVulkanMaterial == null)
+                        defaultVulkanMaterial = transformMaterial(TextureCache.MISSING, logicalDevice, cache, cmd, textures);
+                    vulkanMaterial = defaultVulkanMaterial;
+                }
+
+                vulkanMaterial.meshes.add(vulkanMesh);
             }
         }
-
         cmd.endRecording();
 
         try (var stack = MemoryStack.stackPush()) {
@@ -113,17 +139,19 @@ public class GpuModel implements Closeable {
             fence.reset();
             queue.submit(stack.pointers(cmd.vk()), null, null, null, fence);
             fence.waitForFence();
+
             fence.close();
+            cmd.close();
+            stagingBufferList.forEach(VkBuffer::close);
+            textures.forEach(Texture::closeStagingBuffer);
         }
 
-        cmd.close();
-        stagingBufferList.forEach(VkBuffer::close);
         return gpuModels;
     }
 
     @Override
     public void close() {
-        gpuMeshList.forEach(GpuMesh::close);
+        materials.forEach(material -> material.meshes.forEach(Mesh::close));
     }
 
     private record TransferBuffers(
@@ -131,7 +159,7 @@ public class GpuModel implements Closeable {
             VkBuffer dstBuffer
     ) {}
 
-    public record GpuMesh(
+    public record Mesh(
             VkBuffer verticesBuffer,
             VkBuffer indicesBuffer,
             int indexCount
@@ -142,4 +170,9 @@ public class GpuModel implements Closeable {
             indicesBuffer.close();
         }
     }
+
+    public record Material(
+            Texture texture,
+            List<Mesh> meshes
+    ) {}
 }

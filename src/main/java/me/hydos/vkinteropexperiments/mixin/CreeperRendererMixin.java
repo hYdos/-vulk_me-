@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.MobRenderer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.monster.Creeper;
+import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Mixin;
 
 import java.util.HashMap;
@@ -25,7 +26,7 @@ public abstract class CreeperRendererMixin extends MobRenderer<Creeper, CreeperM
     }
 
     @Override
-    public void render(Creeper entity, float entityYaw, float partialTicks, PoseStack modelViewStack, MultiBufferSource buffer, int packedLight) {
+    public void render(@NotNull Creeper entity, float entityYaw, float partialTicks, @NotNull PoseStack modelViewStack, @NotNull MultiBufferSource buffer, int packedLight) {
         super.render(entity, entityYaw, partialTicks, modelViewStack, buffer, packedLight);
         modelViewStack.pushPose();
         var renderEntity = ENTITY_MAP.computeIfAbsent(entity, creeper -> VKInteropExperiments.getInstance().loadTestEntity());

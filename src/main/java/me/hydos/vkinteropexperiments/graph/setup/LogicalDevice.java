@@ -15,6 +15,7 @@ public class LogicalDevice implements Closeable, VkObjectHolder<VkDevice> {
     private static final Logger LOGGER = LoggerFactory.getLogger(LogicalDevice.class);
     public final PhysicalDevice physicalDevice;
     private final VkDevice vkDevice;
+    public boolean samplerAnisotropy;
 
     public LogicalDevice(PhysicalDevice physicalDevice) {
         LOGGER.info("Creating LogicalDevice derived from" + physicalDevice.getName());
@@ -25,6 +26,9 @@ public class LogicalDevice implements Closeable, VkObjectHolder<VkDevice> {
             requiredExtensions.put(0, stack.ASCII(KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME));
 
             var features = VkPhysicalDeviceFeatures.calloc(stack);
+            var supportedFeatures = this.physicalDevice.physicalDeviceFeatures;
+            this.samplerAnisotropy = supportedFeatures.samplerAnisotropy();
+            if (samplerAnisotropy) features.samplerAnisotropy(true);
 
             var queuePropsBuff = physicalDevice.queueFamilyProps;
             int numQueuesFamilies = queuePropsBuff.capacity();

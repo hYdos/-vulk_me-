@@ -2,45 +2,56 @@ package me.hydos.vkinteropexperiments.graph;
 
 import me.hydos.vkinteropexperiments.graph.command.CommandBuffer;
 import me.hydos.vkinteropexperiments.graph.command.CommandPool;
+import me.hydos.vkinteropexperiments.graph.descriptor.DescriptorPool;
+import me.hydos.vkinteropexperiments.graph.descriptor.DescriptorSet;
+import me.hydos.vkinteropexperiments.graph.descriptor.DescriptorSetLayout;
+import me.hydos.vkinteropexperiments.graph.descriptor.TextureDescriptorSet;
 import me.hydos.vkinteropexperiments.graph.image.ImageAttachment;
-import me.hydos.vkinteropexperiments.graph.pipeline.Pipeline;
-import me.hydos.vkinteropexperiments.graph.pipeline.PipelineCache;
+import me.hydos.vkinteropexperiments.graph.cache.PipelineCache;
+import me.hydos.vkinteropexperiments.graph.image.texture.Texture;
+import me.hydos.vkinteropexperiments.graph.image.texture.TextureSampler;
 import me.hydos.vkinteropexperiments.graph.setup.LogicalDevice;
 import me.hydos.vkinteropexperiments.graph.setup.Queue;
 import me.hydos.vkinteropexperiments.graph.shader.ShaderProgram;
 import me.hydos.vkinteropexperiments.graph.swapchain.RenderPass;
 import me.hydos.vkinteropexperiments.graph.swapchain.SurfaceSwapchain;
-import me.hydos.vkinteropexperiments.graph.swapchain.Swapchain;
 import me.hydos.vkinteropexperiments.graph.sync.Fence;
 import me.hydos.vkinteropexperiments.graph.vertex.GpuModel;
 import me.hydos.vkinteropexperiments.graph.vertex.VertexBufferStructure;
+import me.hydos.vkinteropexperiments.memory.VkBuffer;
 import me.hydos.vkinteropexperiments.scene.Scene;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
+import java.awt.image.BufferedImage;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
-public class ForwardRenderActivity implements Closeable {
+public class RendererImpl implements Closeable {
 
     private final CommandBuffer[] cmdBuffers;
     private final Fence[] fences;
     private final ShaderProgram shader;
     private final Pipeline pipeline;
-    private final PipelineCache pipelineCache;
     private final RenderPass renderPass;
     private final Scene scene;
     private final LogicalDevice logicalDevice;
     private FrameBuffer[] frameBuffers;
     private ImageAttachment[] depthAttachments;
     private SurfaceSwapchain swapchain;
+    private DescriptorPool descriptorPool;
+    private DescriptorSetLayout[] descriptorSetLayouts;
+    private Map<BufferedImage, TextureDescriptorSet> descriptorSetMap;
+    private DescriptorSet.UniformDescriptorSet projMatrixDescriptorSet;
+    private VkBuffer projMatrixUniform;
+    private DescriptorSetLayout.SamplerDescriptorSetLayout textureDescriptorSetLayout;
+    private TextureSampler textureSampler;
+    private DescriptorSetLayout.UniformDescriptorSetLayout uniformDescriptorSetLayout;
 
-    public ForwardRenderActivity(SurfaceSwapchain swapchain, CommandPool cmdPool, PipelineCache pipelineCache, Scene scene) {
+    public RendererImpl(SurfaceSwapchain swapchain, CommandPool cmdPool, PipelineCache pipelineCache, Scene scene) {
         this.swapchain = swapchain;
-        this.pipelineCache = pipelineCache;
         this.scene = scene;
         this.logicalDevice = swapchain.logicalDevice;
 
@@ -54,13 +65,16 @@ public class ForwardRenderActivity implements Closeable {
                 new ShaderProgram.ShaderModuleData(VK10.VK_SHADER_STAGE_FRAGMENT_BIT, "triangle.f.glsl")
         });
 
+        createDescriptorSets();
+
         this.pipeline = new Pipeline(pipelineCache, new Pipeline.CreationInfo(
                 renderPass.vk(),
                 shader,
                 1,
                 true,
-                Float.BYTES * 4 * 4 * 2,
-                new VertexBufferStructure()
+                Float.BYTES * 4 * 4,
+                new VertexBufferStructure(),
+                descriptorSetLayouts
         ));
 
         this.cmdBuffers = new CommandBuffer[imgCount];
@@ -70,6 +84,24 @@ public class ForwardRenderActivity implements Closeable {
             cmdBuffers[i] = new CommandBuffer(cmdPool, true, false);
             fences[i] = new Fence(logicalDevice, true);
         }
+    }
+
+    private void createDescriptorSets() {
+        this.uniformDescriptorSetLayout = new DescriptorSetLayout.UniformDescriptorSetLayout(logicalDevice, 0, VK10.VK_SHADER_STAGE_VERTEX_BIT);
+        this.textureDescriptorSetLayout = new DescriptorSetLayout.SamplerDescriptorSetLayout(logicalDevice, 0, VK10.VK_SHADER_STAGE_FRAGMENT_BIT);
+        this.descriptorSetLayouts = new DescriptorSetLayout[]{
+                uniformDescriptorSetLayout,
+                textureDescriptorSetLayout,
+        };
+
+        var descriptorTypeCounts = new ArrayList<DescriptorPool.DescriptorTypeCount>();
+        descriptorTypeCounts.add(new DescriptorPool.DescriptorTypeCount(1, VK10.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER));
+        descriptorTypeCounts.add(new DescriptorPool.DescriptorTypeCount(1, VK10.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER));
+        this.descriptorPool = new DescriptorPool(logicalDevice, descriptorTypeCounts);
+        this.descriptorSetMap = new HashMap<>();
+        this.textureSampler = new TextureSampler(logicalDevice, 1);
+        this.projMatrixUniform = new VkBuffer(logicalDevice, Float.BYTES * 4 * 4, VK10.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK10.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        this.projMatrixDescriptorSet = new DescriptorSet.UniformDescriptorSet(descriptorPool, uniformDescriptorSetLayout, projMatrixUniform, 0);
     }
 
     private void createDepthImages() {
@@ -156,20 +188,29 @@ public class ForwardRenderActivity implements Closeable {
             var offsets = stack.mallocLong(1).put(0, 0L);
             var vertexBuffer = stack.mallocLong(1);
 
-            var pushConstantBuffer = stack.malloc(Float.BYTES * 4 * 4 * 2);
+            var descriptorSets = stack.mallocLong(2).put(0, projMatrixDescriptorSet.vk());
+
             for (var model : models) {
                 var name = model.name;
                 var entities = scene.getEntitiesByModelId(name);
                 if (entities.isEmpty()) continue;
 
-                for (var mesh : model.gpuMeshList) {
-                    vertexBuffer.put(0, mesh.verticesBuffer().buffer);
-                    VK10.vkCmdBindVertexBuffers(cmdHandle, 0, vertexBuffer, offsets);
-                    VK10.vkCmdBindIndexBuffer(cmdHandle, mesh.indicesBuffer().buffer, 0, VK10.VK_INDEX_TYPE_UINT32);
+                for (var material : model.materials) {
+                    if (material.meshes().isEmpty()) continue;
 
-                    for (var entity : entities) {
-                        setPushConstants(cmdHandle, scene.getProjection(), entity.translation, pushConstantBuffer);
-                        VK10.vkCmdDrawIndexed(cmdHandle, mesh.indexCount(), 1, 0, 0, 0);
+                    var textureDescriptorSet = descriptorSetMap.get(material.texture().cpuTexture);
+                    descriptorSets.put(1, textureDescriptorSet.vk());
+
+                    for (var mesh : material.meshes()) {
+                        vertexBuffer.put(0, mesh.verticesBuffer().buffer);
+                        VK10.vkCmdBindVertexBuffers(cmdHandle, 0, vertexBuffer, offsets);
+                        VK10.vkCmdBindIndexBuffer(cmdHandle, mesh.indicesBuffer().buffer, 0, VK10.VK_INDEX_TYPE_UINT32);
+
+                        for (var entity : entities) {
+                            VK10.vkCmdBindDescriptorSets(cmdHandle, VK10.VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, descriptorSets, null);
+                            VkUtils.setMatrixAsPushConstant(pipeline, cmdHandle, entity.translation);
+                            VK10.vkCmdDrawIndexed(cmdHandle, mesh.indexCount(), 1, 0, 0, 0);
+                        }
                     }
                 }
             }
@@ -179,10 +220,20 @@ public class ForwardRenderActivity implements Closeable {
         }
     }
 
-    private void setPushConstants(VkCommandBuffer cmdBuffer, Matrix4f projMatrix, Matrix4f modelMatrix, ByteBuffer pushConstantBuffer) {
-        projMatrix.get(pushConstantBuffer);
-        modelMatrix.get(Float.BYTES * 4 * 4, pushConstantBuffer);
-        VK10.vkCmdPushConstants(cmdBuffer, pipeline.layout, VK10.VK_SHADER_STAGE_VERTEX_BIT, 0, pushConstantBuffer);
+    public void registerModels(List<GpuModel> models) {
+        logicalDevice.waitIdle();
+
+        for (var vulkanModel : models) {
+            for (var material : vulkanModel.materials) {
+                if (material.meshes().isEmpty()) continue;
+                updateTextureDescriptorSet(material.texture());
+            }
+        }
+    }
+
+    private void updateTextureDescriptorSet(Texture texture) {
+        var cpuReference = texture.cpuTexture;
+        descriptorSetMap.computeIfAbsent(cpuReference, image -> new TextureDescriptorSet(descriptorPool, textureDescriptorSetLayout, texture, textureSampler, 0));
     }
 
     public void resize(SurfaceSwapchain swapchain) {
@@ -195,6 +246,7 @@ public class ForwardRenderActivity implements Closeable {
 
     public void submit(Queue queue) {
         try (var stack = MemoryStack.stackPush()) {
+            VkUtils.copyMatrix(projMatrixUniform, scene.getProjection());
             var idx = swapchain.currentFrame;
             var commandBuffer = cmdBuffers[idx];
             var currentFence = fences[idx];
@@ -208,6 +260,10 @@ public class ForwardRenderActivity implements Closeable {
 
     @Override
     public void close() {
+        projMatrixUniform.close();
+        textureSampler.close();
+        descriptorPool.close();
+        Arrays.stream(descriptorSetLayouts).forEach(DescriptorSetLayout::close);
         pipeline.close();
         Arrays.stream(depthAttachments).forEach(ImageAttachment::close);
         shader.close();

@@ -1,6 +1,7 @@
-package me.hydos.vkinteropexperiments.graph.pipeline;
+package me.hydos.vkinteropexperiments.graph;
 
-import me.hydos.vkinteropexperiments.graph.VkObjectHolder;
+import me.hydos.vkinteropexperiments.graph.cache.PipelineCache;
+import me.hydos.vkinteropexperiments.graph.descriptor.DescriptorSetLayout;
 import me.hydos.vkinteropexperiments.graph.setup.LogicalDevice;
 import me.hydos.vkinteropexperiments.graph.shader.ShaderProgram;
 import me.hydos.vkinteropexperiments.graph.vertex.VertexInputStateInfo;
@@ -84,10 +85,16 @@ public class Pipeline implements Closeable, VkObjectHolder<Long> {
                     .offset(0)
                     .size(creationInfo.pushConstantsSize);
 
+            var descriptorSetLayouts = creationInfo.descriptorSetLayouts();
+            var numLayouts = descriptorSetLayouts != null ? descriptorSetLayouts.length : 0;
+            var pLayouts = stack.mallocLong(numLayouts);
+            for (int i = 0; i < numLayouts; i++) pLayouts.put(i, descriptorSetLayouts[i].layout);
+
             var layoutCreateInfo = VkPipelineLayoutCreateInfo.calloc(stack)
                     .sType$Default()
+                    .pSetLayouts(pLayouts)
                     .pPushConstantRanges(pushConstantRange);
-            ok(VK10.vkCreatePipelineLayout(logicalDevice.vk(), layoutCreateInfo, null, pp), "Failed to create pipeline layout");
+            ok(VK10.vkCreatePipelineLayout(logicalDevice.vk(), layoutCreateInfo, null, pp), "Failed to create PipelineLayout");
             this.layout = pp.get(0);
 
             var pipeline = VkGraphicsPipelineCreateInfo.calloc(1, stack)
@@ -126,7 +133,8 @@ public class Pipeline implements Closeable, VkObjectHolder<Long> {
             int colorAttachmentCount,
             boolean hasDepth,
             int pushConstantsSize,
-            VertexInputStateInfo vertInputStateInfo
+            VertexInputStateInfo vertInputStateInfo,
+            DescriptorSetLayout[] descriptorSetLayouts
     ) implements Closeable {
         @Override
         public void close() {

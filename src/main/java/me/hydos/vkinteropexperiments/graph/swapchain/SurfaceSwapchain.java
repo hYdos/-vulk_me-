@@ -115,7 +115,7 @@ public class SurfaceSwapchain implements Swapchain {
 
     @Override
     public void close() {
-        LOGGER.info("Closing SurfaceSwapchain");
+        LOGGER.info("Closing");
         Arrays.stream(imageViews).forEach(ImageView::close);
         Arrays.stream(syncSemaphores).forEach(SyncSemaphores::close);
         KHRSwapchain.vkDestroySwapchainKHR(logicalDevice.vk(), swapchain, null);

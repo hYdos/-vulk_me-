@@ -30,13 +30,12 @@ public class VKInteropExperiments implements Closeable {
                 3,
                 "NVIDIA GeForce RTX 2070 SUPER"
         ));
-
-        Runtime.getRuntime().addShutdownHook(new Thread(this::close));
     }
 
     public RenderEntity loadTestEntity() {
         var locator = new ResourceCachedFileLocator("rayquaza");
         var model = AssimpModelLoader.load("model.gltf", locator, Assimp.aiProcess_GenNormals | Assimp.aiProcess_LimitBoneWeights);
+        var materialUploader = new MaterialUploader(model, locator, renderer);
 
         var meshes = new ArrayList<ModelData.MeshData>();
         for (var mesh : model.meshes()) {
@@ -61,10 +60,13 @@ public class VKInteropExperiments implements Closeable {
             meshes.add(new ModelData.MeshData(
                     positions,
                     uvs,
-                    indices
+                    indices,
+                    0
             ));
         }
-        var modelData = new ModelData("TestModel", meshes);
+        var modelData = new ModelData("TestModel", materialUploader.materials.values().stream()
+                .map(material -> material.textures.get(0))
+                .toList(), meshes);
         renderer.loadModels(List.of(modelData));
 
         var entity = new RenderEntity("TestEntity", "TestModel", new Vector3f(0, 0, -2));

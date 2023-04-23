@@ -1,6 +1,5 @@
 package me.hydos.vkinteropexperiments.debug;
 
-import org.lwjgl.glfw.Callbacks;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWVulkan;
 
@@ -36,12 +35,5 @@ public class DebugWindow implements Closeable {
 
     @Override
     public void close() {
-        try {
-            Callbacks.glfwFreeCallbacks(pointer);
-            GLFW.glfwDestroyWindow(pointer);
-            GLFW.glfwTerminate();
-        } catch (NullPointerException e) {
-            // The window probably already closed :(
-        }
     }
 }

@@ -2,8 +2,9 @@ package me.hydos.vkinteropexperiments.graph;
 
 import me.hydos.vkinteropexperiments.debug.DebugWindow;
 import me.hydos.vkinteropexperiments.debug.Surface;
+import me.hydos.vkinteropexperiments.graph.cache.TextureCache;
 import me.hydos.vkinteropexperiments.graph.command.CommandPool;
-import me.hydos.vkinteropexperiments.graph.pipeline.PipelineCache;
+import me.hydos.vkinteropexperiments.graph.cache.PipelineCache;
 import me.hydos.vkinteropexperiments.graph.setup.Instance;
 import me.hydos.vkinteropexperiments.graph.setup.LogicalDevice;
 import me.hydos.vkinteropexperiments.graph.setup.PhysicalDevice;
@@ -30,8 +31,9 @@ public class Renderer implements Closeable {
     public final CommandPool cmdPool;
     private final PipelineCache pipelineCache;
     public final Queue.Present presentQueue;
-    public final ForwardRenderActivity fwdRenderActivity;
+    public final RendererImpl impl;
     private final List<GpuModel> models = new ArrayList<>();
+    public final TextureCache textureCache = new TextureCache();
     public Swapchain swapchain;
 
     public Renderer(boolean enableDebug, DebugWindow window, Scene scene, Settings settings) {
@@ -44,13 +46,15 @@ public class Renderer implements Closeable {
         this.swapchain = window != null ? new SurfaceSwapchain(logicalDevice, surface, window, settings.imageCount, settings.vSync) : null;
         this.cmdPool = new CommandPool(logicalDevice, graphicsQueue.queueFamilyIndex);
         this.pipelineCache = new PipelineCache(logicalDevice);
-        this.fwdRenderActivity = new ForwardRenderActivity(((SurfaceSwapchain) swapchain), cmdPool, pipelineCache, scene);
+        this.impl = new RendererImpl(((SurfaceSwapchain) swapchain), cmdPool, pipelineCache, scene);
     }
 
     public void loadModels(List<ModelData> models) {
         LOGGER.info("Loading {} models", models.size());
-        this.models.addAll(GpuModel.transformModels(models, cmdPool, graphicsQueue));
+        this.models.addAll(GpuModel.transformModels(models, textureCache, cmdPool, graphicsQueue));
         LOGGER.info("Loaded {} models", models.size());
+
+        impl.registerModels(this.models);
     }
 
     public void render(DebugWindow window) {
@@ -61,8 +65,8 @@ public class Renderer implements Closeable {
             ((SurfaceSwapchain) swapchain).acquireNextImage();
         }
 
-        fwdRenderActivity.recordCmdBuffer(models);
-        fwdRenderActivity.submit(presentQueue);
+        impl.recordCmdBuffer(models);
+        impl.submit(presentQueue);
 
         if (((SurfaceSwapchain) swapchain).presentImage(graphicsQueue)) {
             window.resized = true;
@@ -79,11 +83,10 @@ public class Renderer implements Closeable {
 
     @Override
     public void close() {
-        presentQueue.waitIdle();
-        graphicsQueue.waitIdle();
-        logicalDevice.waitIdle();
+        waitFor();
+        textureCache.close();
         models.forEach(GpuModel::close);
-        fwdRenderActivity.close();
+        impl.close();
         cmdPool.close();
         swapchain.close();
         surface.close();
@@ -92,10 +95,15 @@ public class Renderer implements Closeable {
         instance.close();
     }
 
+    public void waitFor() {
+        presentQueue.waitIdle();
+        graphicsQueue.waitIdle();
+        logicalDevice.waitIdle();
+    }
+
     public record Settings(
             boolean vSync,
             int imageCount,
             String preferredDevice
-    ) {
-    }
+    ) {}
 }

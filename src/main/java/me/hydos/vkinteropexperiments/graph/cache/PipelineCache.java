@@ -1,4 +1,4 @@
-package me.hydos.vkinteropexperiments.graph.pipeline;
+package me.hydos.vkinteropexperiments.graph.cache;
 
 import me.hydos.vkinteropexperiments.graph.VkObjectHolder;
 import me.hydos.vkinteropexperiments.graph.setup.LogicalDevice;
@@ -19,7 +19,7 @@ public class PipelineCache implements Closeable, VkObjectHolder<Long> {
 
     public PipelineCache(LogicalDevice logicalDevice) {
         try (var stack = MemoryStack.stackPush()) {
-            LOGGER.info("Creating PiplineCache");
+            LOGGER.info("Creating PipelineCache");
             this.logicalDevice = logicalDevice;
             var createInfo = VkPipelineCacheCreateInfo.calloc(stack).sType$Default();
 

@@ -1,6 +1,10 @@
 package me.hydos.vkinteropexperiments.graph;
 
 import me.hydos.vkinteropexperiments.graph.setup.PhysicalDevice;
+import me.hydos.vkinteropexperiments.memory.VkBuffer;
+import org.joml.Matrix4f;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.*;
 
 /**
@@ -32,29 +36,24 @@ public class VkUtils {
                     "A swapchain no longer matches the surface properties exactly, but can still be used to present to the surface successfully.";
 
             // Error codes
+            case VK11.VK_ERROR_OUT_OF_POOL_MEMORY -> "Allocation failed due to no more space in the descriptor pool, and not because of system or device memory exhaustion.";
             case VK10.VK_ERROR_OUT_OF_HOST_MEMORY -> "A host memory allocation has failed.";
             case VK10.VK_ERROR_OUT_OF_DEVICE_MEMORY -> "A device memory allocation has failed.";
-            case VK10.VK_ERROR_INITIALIZATION_FAILED ->
-                    "Initialization of an object could not be completed for implementation-specific reasons.";
+            case VK10.VK_ERROR_INITIALIZATION_FAILED -> "Initialization of an object could not be completed for implementation-specific reasons.";
             case VK10.VK_ERROR_DEVICE_LOST -> "The logical or physical device has been lost.";
             case VK10.VK_ERROR_MEMORY_MAP_FAILED -> "Mapping of a memory object has failed.";
             case VK10.VK_ERROR_LAYER_NOT_PRESENT -> "A requested layer is not present or could not be loaded.";
             case VK10.VK_ERROR_EXTENSION_NOT_PRESENT -> "A requested extension is not supported.";
             case VK10.VK_ERROR_FEATURE_NOT_PRESENT -> "A requested feature is not supported.";
-            case VK10.VK_ERROR_INCOMPATIBLE_DRIVER ->
-                    "The requested version of Vulkan is not supported by the driver or is otherwise incompatible for implementation-specific reasons.";
+            case VK10.VK_ERROR_INCOMPATIBLE_DRIVER -> "The requested version of Vulkan is not supported by the driver or is otherwise incompatible for implementation-specific reasons.";
             case VK10.VK_ERROR_TOO_MANY_OBJECTS -> "Too many objects of the type have already been created.";
             case VK10.VK_ERROR_FORMAT_NOT_SUPPORTED -> "A requested format is not supported on this device.";
             case KHRSurface.VK_ERROR_SURFACE_LOST_KHR -> "A surface is no longer available.";
-            case KHRSurface.VK_ERROR_NATIVE_WINDOW_IN_USE_KHR ->
-                    "The requested window is already connected to a VkSurfaceKHR, or to some other non-Vulkan API.";
-            case KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR ->
-                    "A surface has changed in such a way that it is no longer compatible with the swapchain, and further presentation requests using the "
+            case KHRSurface.VK_ERROR_NATIVE_WINDOW_IN_USE_KHR -> "The requested window is already connected to a VkSurfaceKHR, or to some other non-Vulkan API.";
+            case KHRSwapchain.VK_ERROR_OUT_OF_DATE_KHR -> "A surface has changed in such a way that it is no longer compatible with the swapchain, and further presentation requests using the "
                             + "swapchain will fail. Applications must query the new surface properties and recreate their swapchain if they wish to continue"
                             + "presenting to the surface.";
-            case KHRDisplaySwapchain.VK_ERROR_INCOMPATIBLE_DISPLAY_KHR ->
-                    "The display used by a swapchain does not use the same presentable image layout, or is incompatible in a way that prevents sharing an"
-                            + " image.";
+            case KHRDisplaySwapchain.VK_ERROR_INCOMPATIBLE_DISPLAY_KHR -> "The display used by a swapchain does not use the same presentable image layout, or is incompatible in a way that prevents sharing an image.";
             case EXTDebugReport.VK_ERROR_VALIDATION_FAILED_EXT -> "A validation layer found an error.";
             default -> String.format("%s [%d]", "Unknown", result);
         };
@@ -74,5 +73,24 @@ public class VkUtils {
 
         if (result < 0) throw new RuntimeException("Failed to find memoryType");
         return result;
+    }
+
+    public static void copyMatrix(VkBuffer vulkanBuffer, Matrix4f matrix) {
+        copyMatrix(vulkanBuffer, matrix, 0);
+    }
+
+    public static void copyMatrix(VkBuffer vulkanBuffer, Matrix4f matrix, int offset) {
+        var mappedMemory = vulkanBuffer.map();
+        var matrixBuffer = MemoryUtil.memByteBuffer(mappedMemory, (int) vulkanBuffer.requestedSize);
+        matrix.get(offset, matrixBuffer);
+        vulkanBuffer.unMap();
+    }
+
+    public static void setMatrixAsPushConstant(Pipeline pipeLine, VkCommandBuffer cmdHandle, Matrix4f matrix) {
+        try (var stack = MemoryStack.stackPush()) {
+            var pushConstantBuffer = stack.malloc(Float.BYTES * 4 * 4);
+            matrix.get(0, pushConstantBuffer);
+            VK10.vkCmdPushConstants(cmdHandle, pipeLine.layout, VK10.VK_SHADER_STAGE_VERTEX_BIT, 0, pushConstantBuffer);
+        }
     }
 }
