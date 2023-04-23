@@ -6,11 +6,10 @@ import me.hydos.vkinteropexperiments.graph.image.ImageView;
 import me.hydos.vkinteropexperiments.graph.image.ImageViewData;
 import me.hydos.vkinteropexperiments.graph.setup.LogicalDevice;
 import me.hydos.vkinteropexperiments.memory.VkBuffer;
+import net.minecraft.util.Mth;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
-import org.lwjgl.vulkan.VK10;
-import org.lwjgl.vulkan.VkBufferImageCopy;
-import org.lwjgl.vulkan.VkImageMemoryBarrier;
+import org.lwjgl.vulkan.*;
 
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferFloat;
@@ -26,16 +25,18 @@ public class Texture implements Closeable {
     public final int height;
     public final int mipLevels;
     public final BufferedImage cpuTexture;
+    public final boolean transparent;
     private VkBuffer stagingBuf;
     private boolean recordedTransition;
 
-    public Texture(LogicalDevice logicalDevice, BufferedImage image, int format, int mipLevels) {
+    public Texture(LogicalDevice logicalDevice, BufferedImage image, int format, boolean transparent) {
         var imgBuffer = image.getData().getDataBuffer();
         var rgbaBuffer = (ByteBuffer) null;
         this.width = image.getWidth();
         this.height = image.getHeight();
-        this.mipLevels = mipLevels;
+        this.mipLevels = (int) ((double) Mth.log2(Math.min(width, height)) + 1);
         this.cpuTexture = image;
+        this.transparent = transparent;
 
         if (imgBuffer instanceof DataBufferFloat intBuffer) {
             var rawData = intBuffer.getData();
@@ -91,6 +92,7 @@ public class Texture implements Closeable {
                 recordImageTransition(stack, cmdBuffer, VK10.VK_IMAGE_LAYOUT_UNDEFINED, VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
                 recordCopyBuffer(stack, cmdBuffer, stagingBuf);
                 recordImageTransition(stack, cmdBuffer, VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK10.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                recordGenerateMipMaps(stack, cmdBuffer);
             }
         }
     }
@@ -149,10 +151,81 @@ public class Texture implements Closeable {
             throw new RuntimeException("Unsupported layout transition");
         }
 
-        barrier
-                .srcAccessMask(srcAccessMask)
+        barrier.srcAccessMask(srcAccessMask)
                 .dstAccessMask(dstAccessMask);
         VK10.vkCmdPipelineBarrier(cmd.vk(), srcStage, dstStage, 0, null, null, barrier);
+    }
+
+    private void recordGenerateMipMaps(MemoryStack stack, CommandBuffer cmd) {
+        var subResourceRange = VkImageSubresourceRange.calloc(stack)
+                .aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)
+                .baseArrayLayer(0)
+                .levelCount(1)
+                .layerCount(1);
+
+        var barrier = VkImageMemoryBarrier.calloc(1, stack)
+                .sType(VK10.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER)
+                .image(image.vk())
+                .srcQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .dstQueueFamilyIndex(VK10.VK_QUEUE_FAMILY_IGNORED)
+                .subresourceRange(subResourceRange);
+
+        int mipWidth = width;
+        int mipHeight = height;
+
+        for (var i = 1; i < mipLevels; i++) {
+            subResourceRange.baseMipLevel(i - 1);
+            barrier.subresourceRange(subResourceRange)
+                    .oldLayout(VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+                    .newLayout(VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+                    .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
+                    .dstAccessMask(VK10.VK_ACCESS_TRANSFER_READ_BIT);
+
+            VK10.vkCmdPipelineBarrier(cmd.vk(), VK10.VK_PIPELINE_STAGE_TRANSFER_BIT, VK10.VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, barrier);
+
+            var finalI = i; // gotta love java sometimes. TBF it doesn't know
+            var srcOffset0 = VkOffset3D.calloc(stack).x(0).y(0).z(0);
+            var srcOffset1 = VkOffset3D.calloc(stack).x(mipWidth).y(mipHeight).z(1);
+            var dstOffset0 = VkOffset3D.calloc(stack).x(0).y(0).z(0);
+            var dstOffset1 = VkOffset3D.calloc(stack).x(mipWidth > 1 ? mipWidth / 2 : 1).y(mipHeight > 1 ? mipHeight / 2 : 1).z(1);
+            var blit = VkImageBlit.calloc(1, stack)
+                    .srcOffsets(0, srcOffset0)
+                    .srcOffsets(1, srcOffset1)
+                    .srcSubresource(it -> it
+                            .aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)
+                            .mipLevel(finalI - 1)
+                            .baseArrayLayer(0)
+                            .layerCount(1))
+                    .dstOffsets(0, dstOffset0)
+                    .dstOffsets(1, dstOffset1)
+                    .dstSubresource(it -> it
+                            .aspectMask(VK10.VK_IMAGE_ASPECT_COLOR_BIT)
+                            .mipLevel(finalI)
+                            .baseArrayLayer(0)
+                            .layerCount(1));
+
+            VK10.vkCmdBlitImage(cmd.vk(),
+                    image.vk(), VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    image.vk(), VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    blit, VK10.VK_FILTER_LINEAR);
+
+            barrier.oldLayout(VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+                    .newLayout(VK10.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                    .srcAccessMask(VK10.VK_ACCESS_TRANSFER_READ_BIT)
+                    .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT);
+
+            VK10.vkCmdPipelineBarrier(cmd.vk(), VK10.VK_PIPELINE_STAGE_TRANSFER_BIT, VK10.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, null, null, barrier);
+            if (mipWidth > 1) mipWidth /= 2;
+            if (mipHeight > 1) mipHeight /= 2;
+        }
+
+        barrier.subresourceRange(it -> it.baseMipLevel(mipLevels - 1))
+                .oldLayout(VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+                .newLayout(VK10.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                .srcAccessMask(VK10.VK_ACCESS_TRANSFER_WRITE_BIT)
+                .dstAccessMask(VK10.VK_ACCESS_SHADER_READ_BIT);
+
+        VK10.vkCmdPipelineBarrier(cmd.vk(), VK10.VK_PIPELINE_STAGE_TRANSFER_BIT, VK10.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, null, null, barrier);
     }
 
     private void createStagingBuffer(LogicalDevice device, ByteBuffer data) {

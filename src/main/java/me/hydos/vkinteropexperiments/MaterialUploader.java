@@ -99,7 +99,7 @@ public class MaterialUploader {
     }
 
     private void upload(Material material, BufferedImage image) {
-        renderer.textureCache.createTexture(renderer.logicalDevice, image, VK10.VK_FORMAT_R8G8B8A8_SRGB);
+        renderer.textureCache.createTexture(renderer.logicalDevice, image, VK10.VK_FORMAT_R8G8B8A8_SRGB, false);
         material.textures.add(image);
     }
 

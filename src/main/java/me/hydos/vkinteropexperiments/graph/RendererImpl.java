@@ -72,6 +72,7 @@ public class RendererImpl implements Closeable {
                 shader,
                 1,
                 true,
+                false,
                 Float.BYTES * 4 * 4,
                 new VertexBufferStructure(),
                 descriptorSetLayouts

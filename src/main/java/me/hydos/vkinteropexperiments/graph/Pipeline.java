@@ -54,7 +54,7 @@ public class Pipeline implements Closeable, VkObjectHolder<Long> {
                     .rasterizationSamples(VK10.VK_SAMPLE_COUNT_1_BIT);
 
             var depthStencilCreateInfo = (VkPipelineDepthStencilStateCreateInfo) null;
-            if (creationInfo.hasDepth) {
+            if (creationInfo.enableDepth) {
                 depthStencilCreateInfo = VkPipelineDepthStencilStateCreateInfo.calloc(stack)
                         .sType$Default()
                         .depthTestEnable(true)
@@ -66,8 +66,21 @@ public class Pipeline implements Closeable, VkObjectHolder<Long> {
 
             var blendAttachmentState = VkPipelineColorBlendAttachmentState.calloc(creationInfo.colorAttachmentCount(), stack);
 
-            for (var i = 0; i < creationInfo.colorAttachmentCount(); i++)
-                blendAttachmentState.get(i).colorWriteMask(VK10.VK_COLOR_COMPONENT_R_BIT | VK10.VK_COLOR_COMPONENT_G_BIT | VK10.VK_COLOR_COMPONENT_B_BIT | VK10.VK_COLOR_COMPONENT_A_BIT);
+            for (var i = 0; i < creationInfo.colorAttachmentCount(); i++) {
+                blendAttachmentState.get(i)
+                        .colorWriteMask(VK10.VK_COLOR_COMPONENT_R_BIT | VK10.VK_COLOR_COMPONENT_G_BIT | VK10.VK_COLOR_COMPONENT_B_BIT | VK10.VK_COLOR_COMPONENT_A_BIT)
+                        .blendEnable(creationInfo.enableBlend());
+
+                if (creationInfo.enableBlend()) {
+                    blendAttachmentState.get(i)
+                            .colorBlendOp(VK10.VK_BLEND_OP_ADD)
+                            .alphaBlendOp(VK10.VK_BLEND_OP_ADD)
+                            .srcColorBlendFactor(VK10.VK_BLEND_FACTOR_SRC_ALPHA)
+                            .dstColorBlendFactor(VK10.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
+                            .srcAlphaBlendFactor(VK10.VK_BLEND_FACTOR_ONE)
+                            .dstAlphaBlendFactor(VK10.VK_BLEND_FACTOR_ZERO);
+                }
+            }
 
             var colorBlendState = VkPipelineColorBlendStateCreateInfo.calloc(stack)
                     .sType$Default()
@@ -131,7 +144,8 @@ public class Pipeline implements Closeable, VkObjectHolder<Long> {
             long vkRenderPass,
             ShaderProgram shaderProgram,
             int colorAttachmentCount,
-            boolean hasDepth,
+            boolean enableDepth,
+            boolean enableBlend,
             int pushConstantsSize,
             VertexInputStateInfo vertInputStateInfo,
             DescriptorSetLayout[] descriptorSetLayouts

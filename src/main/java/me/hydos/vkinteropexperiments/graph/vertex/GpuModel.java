@@ -85,7 +85,7 @@ public class GpuModel implements Closeable {
     }
 
     private static Material transformMaterial(BufferedImage material, LogicalDevice logicalDevice, TextureCache cache, CommandBuffer cmdBuffer, List<Texture> textures) {
-        var texture = cache.createTexture(logicalDevice, material, VK10.VK_FORMAT_R8G8B8A8_SRGB);
+        var texture = cache.createTexture(logicalDevice, material, VK10.VK_FORMAT_R8G8B8A8_SRGB, false);
         texture.recordTransition(cmdBuffer);
         textures.add(texture);
         return new Material(texture, new ArrayList<>());
@@ -174,5 +174,9 @@ public class GpuModel implements Closeable {
     public record Material(
             Texture texture,
             List<Mesh> meshes
-    ) {}
+    ) {
+        public boolean isTransparent() {
+            return texture.transparent;
+        }
+    }
 }

@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class Renderer implements Closeable {
@@ -53,6 +54,14 @@ public class Renderer implements Closeable {
         LOGGER.info("Loading {} models", models.size());
         this.models.addAll(GpuModel.transformModels(models, textureCache, cmdPool, graphicsQueue));
         LOGGER.info("Loaded {} models", models.size());
+
+        this.models.forEach(m -> m.materials.sort((a, b) -> Boolean.compare(a.isTransparent(), b.isTransparent())));
+        this.models.sort((a, b) -> {
+            var aHasTransparentMat = a.materials.stream().anyMatch(GpuModel.Material::isTransparent);
+            var bHasTransparentMat = b.materials.stream().anyMatch(GpuModel.Material::isTransparent);
+
+            return Boolean.compare(aHasTransparentMat, bHasTransparentMat);
+        });
 
         impl.registerModels(this.models);
     }

@@ -14,9 +14,9 @@ public class TextureCache implements Closeable {
     private final Map<BufferedImage, Texture> textureMap = new HashMap<>();
     private final List<BufferedImage> textures = new ArrayList<>();
 
-    public Texture createTexture(LogicalDevice logicalDevice, BufferedImage cpuTexture, int format) {
+    public Texture createTexture(LogicalDevice logicalDevice, BufferedImage cpuTexture, int format, boolean transparent) {
         return textureMap.computeIfAbsent(cpuTexture, image -> {
-            var texture = new Texture(logicalDevice, cpuTexture, format, 1);
+            var texture = new Texture(logicalDevice, cpuTexture, format, transparent);
             textures.add(image);
             return texture;
         });
